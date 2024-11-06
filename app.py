@@ -8,7 +8,8 @@ import re
 perfis = {
     "Luis Antônio": {"login": "Luis", "senha": "1710", "csv": "perfil1.csv"},
     "Antônio Pereira": {"login": "Antonio", "senha": "1710", "csv": "perfil2.csv"},
-    "Leandro Macedo": {"login": "Leandro", "senha": "1710", "csv": "perfil3.csv"}
+    "Leandro Macedo": {"login": "Leandro", "senha": "1710", "csv": "perfil3.csv"},
+    "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil4.csv"}
 }
 
 # **Iniciar Session State**
