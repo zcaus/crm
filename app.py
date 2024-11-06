@@ -97,15 +97,21 @@ if st.session_state.autenticado:
             }
             salvar_agendamento(agendamento)
             st.success("Visita realizada com Sucesso!")
+           
+    # Limpar os campos usando st.session_state
+    st.session_state.data_visita = None
+    st.session_state.hora_visita = None
+    st.session_state.nome_cliente = None
+    st.session_state.telefone_cliente = None
+    st.session_state.cliente_fechou = None
+    st.session_state.sefechou_valor = None
+    st.session_state.endereco = None
 
-    # Exibir Agendamentos
-    st.title("Visitas Realizadas")
-    if st.button("Consultar Visitas"):
-        agendamentos = ler_agendamentos()
-        if not agendamentos.empty:
-            st.write(agendamentos)
-        else:
-            st.write("Nenhuma visita realizada até o momento.")
+    agendamentos = ler_agendamentos()
+    if not agendamentos.empty:
+        st.write(agendamentos)
+    else:
+        st.write("Nenhuma visita realizada até o momento.")
     
       # **Botão para Sair**
     if st.button("Sair"):
