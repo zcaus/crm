@@ -29,7 +29,7 @@ if not st.session_state.autenticado:
     st.title("Login")
     login = st.text_input("Login")
     senha = st.text_input("Senha", type="password")
-
+    #
     if st.button("Entrar"):
         perfil_selecionado = autenticar(login, senha)
         if perfil_selecionado:
