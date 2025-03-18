@@ -5,9 +5,15 @@ import io
 import os
 from datetime import datetime
 
+# Função para formatar valores monetários no padrão brasileiro: "R$ XXX.XXX,XX"
+def format_currency_br(value):
+    formatted = f"{value:,.2f}"  # Ex: 12,345.67
+    formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
+
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Cláudia Regina": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Cláudia Costa": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
     "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
     "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil3.csv"}
 }
@@ -35,7 +41,7 @@ if not st.session_state.autenticado:
         if perfil_selecionado:
             st.session_state.autenticado = True
             st.session_state.perfil_selecionado = perfil_selecionado
-            st.success(f"Bem-vindo, {perfil_selecionado}!")
+            st.success(f"Bem-vindo(a), {perfil_selecionado}!")
         else:
             st.error("Login ou senha inválidos.")
 
@@ -43,27 +49,28 @@ if not st.session_state.autenticado:
 if st.session_state.autenticado:
     arquivo_csv = perfis[st.session_state.perfil_selecionado]["csv"]  # CSV associado ao perfil
 
-    # Se o arquivo não existir ou estiver vazio, cria com cabeçalho incluindo a coluna 'id'
+    # Define o cabeçalho, incluindo a coluna 'Observação'
+    cabecalho = "id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observação\n"
     if not os.path.exists(arquivo_csv):
-        with open(arquivo_csv, 'w') as arquivo:
-            arquivo.write("id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP\n")
+        with open(arquivo_csv, 'w', encoding='latin1') as arquivo:
+            arquivo.write(cabecalho)
     else:
         try:
-            df_temp = pd.read_csv(arquivo_csv)
-            if df_temp.empty or "id" not in df_temp.columns:
+            df_temp = pd.read_csv(arquivo_csv, encoding='latin1')
+            if df_temp.empty or "id" not in df_temp.columns or "Observação" not in df_temp.columns:
                 raise ValueError
         except Exception:
-            with open(arquivo_csv, 'w') as arquivo:
-                arquivo.write("id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP\n")
+            with open(arquivo_csv, 'w', encoding='latin1') as arquivo:
+                arquivo.write(cabecalho)
 
-    # Função para ler os agendamentos do arquivo CSV
+    # Função para ler os agendamentos do arquivo CSV com encoding especificado
     def ler_agendamentos():
         try:
-            return pd.read_csv(arquivo_csv, dtype={'Telefone': str, 'CEP': str})
+            return pd.read_csv(arquivo_csv, encoding='latin1', dtype={'Telefone': str, 'CEP': str})
         except FileNotFoundError:
-            return pd.DataFrame(columns=['id', 'Data', 'Hora', 'Nome', 'Telefone', 'Fechou?', 'Valor(R$)', 'CEP'])
+            return pd.DataFrame(columns=['id', 'Data', 'Hora', 'Nome', 'Telefone', 'Fechou?', 'Valor(R$)', 'CEP', 'Observação'])
 
-    # Função para salvar agendamento no arquivo CSV utilizando concatenação
+    # Função para salvar agendamento no arquivo CSV utilizando concatenação e encoding definido
     def salvar_agendamento(agendamento):
         agendamentos = ler_agendamentos()
         if agendamentos.empty:
@@ -72,7 +79,7 @@ if st.session_state.autenticado:
             agendamento['id'] = agendamentos['id'].max() + 1
         novo_df = pd.DataFrame([agendamento])
         agendamentos = pd.concat([agendamentos, novo_df], ignore_index=True)
-        agendamentos.to_csv(arquivo_csv, index=False)
+        agendamentos.to_csv(arquivo_csv, index=False, encoding='latin1')
 
     # Formulário de Agendamento
     with st.form("agendamento"):
@@ -86,10 +93,14 @@ if st.session_state.autenticado:
         
         nome_cliente = st.text_input("Nome do Cliente")
         telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
-        cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não"])
+        # Opções para o status do cliente, incluindo "Em negociação"
+        cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não", "Em negociação"])
         col1, col2 = st.columns(2)
         sefechou_valor = col1.text_input("Valor (R$)", placeholder="R$ 0,00")
         endereco = col2.text_input("CEP", placeholder="00000000")  # CEP sem formatação para validação
+        
+        # Campo de Observação
+        observacao = st.text_area("Observação")
         
         submitted = st.form_submit_button("Marcar")
 
@@ -106,7 +117,8 @@ if st.session_state.autenticado:
                     'Telefone': telefone_cliente,
                     'Fechou?': cliente_fechou,
                     'Valor(R$)': sefechou_valor,
-                    'CEP': endereco_formatado
+                    'CEP': endereco_formatado,
+                    'Observação': observacao
                 }
                 salvar_agendamento(agendamento)
                 st.success("Visita realizada com Sucesso!")
@@ -116,12 +128,30 @@ if st.session_state.autenticado:
     # Exibir os agendamentos
     agendamentos = ler_agendamentos()
     if not agendamentos.empty:
+        # Aplica a formatação no valor em real utilizando a função format_currency_br
+        if 'Valor(R$)' in agendamentos.columns:
+            try:
+                agendamentos['Valor(R$)'] = agendamentos['Valor(R$)'].apply(
+                    lambda x: format_currency_br(
+                        float(str(x)
+                              .replace("R$", "")
+                              .replace(" ", "")
+                              .replace(".", "")
+                              .replace(",", "."))
+                    ) if x not in [None, ""] else ""
+                )
+            except Exception as e:
+                st.error(f"Erro na formatação do valor: {e}")
+                
         st.write(agendamentos)
 
         @st.cache_data
         def get_excel_buffer(df):
+            # Cria uma cópia do DataFrame e adiciona a coluna "Usuário"
+            df_copy = df.copy()
+            df_copy["Usuário"] = st.session_state.perfil_selecionado
             buffer = io.BytesIO()
-            df.to_excel(buffer, index=False)
+            df_copy.to_excel(buffer, index=False)
             buffer.seek(0)  # Resetar o ponteiro do buffer para o início
             return buffer
 
@@ -140,4 +170,3 @@ if st.session_state.autenticado:
         st.session_state.autenticado = False
         st.session_state.perfil_selecionado = None
         st.info("Você saiu da aplicação.")
-

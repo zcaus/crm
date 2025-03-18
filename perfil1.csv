@@ -1,1 +1,2 @@
-Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP
+id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observa��o
+
