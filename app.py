@@ -7,7 +7,7 @@ from datetime import datetime
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Cláudia": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Cláudia Regina": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
     "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
     "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil3.csv"}
 }
