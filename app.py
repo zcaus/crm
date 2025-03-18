@@ -3,6 +3,7 @@ import pandas as pd
 import re
 import io
 import os
+from datetime import datetime
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
@@ -42,12 +43,11 @@ if not st.session_state.autenticado:
 if st.session_state.autenticado:
     arquivo_csv = perfis[st.session_state.perfil_selecionado]["csv"]  # CSV associado ao perfil
 
-    # Se o arquivo não existir, cria com cabeçalho incluindo a coluna 'id'
+    # Se o arquivo não existir ou estiver vazio, cria com cabeçalho incluindo a coluna 'id'
     if not os.path.exists(arquivo_csv):
         with open(arquivo_csv, 'w') as arquivo:
             arquivo.write("id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP\n")
     else:
-        # Caso o arquivo exista, mas esteja vazio, também cria o cabeçalho
         try:
             df_temp = pd.read_csv(arquivo_csv)
             if df_temp.empty or "id" not in df_temp.columns:
@@ -79,24 +79,29 @@ if st.session_state.autenticado:
         col1, col2 = st.columns(2)
         data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
         data_visita_formatada = data_visita.strftime('%d/%m/%Y')
-        hora_visita = col2.text_input("Escreva o Horário")
+        
+        # Utilizando st.time_input para capturar o horário no formato HH:MM
+        hora_visita = col2.time_input("Selecione o Horário", value=None)
+        hora_visita_formatada = hora_visita.strftime("%H:%M")
+        
         nome_cliente = st.text_input("Nome do Cliente")
         telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
         cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não"])
         col1, col2 = st.columns(2)
         sefechou_valor = col1.text_input("Valor (R$)", placeholder="R$ 0,00")
         endereco = col2.text_input("CEP", placeholder="00000000")  # CEP sem formatação para validação
+        
         submitted = st.form_submit_button("Marcar")
 
         if submitted:
             # Formatar telefone
             telefone_cliente = re.sub(r'(\d{2})(\d{4,5})(\d{4})', r'(\1) \2-\3', telefone_cliente)
-            # Validar e formatar CEP (deve conter exatamente 8 dígitos)
+            # Validar e formatar CEP (deve conter exatamente 8 dígitos numéricos)
             if len(endereco) == 8 and endereco.isdigit():
                 endereco_formatado = "{}-{}".format(endereco[:5], endereco[5:])
                 agendamento = {
                     'Data': data_visita_formatada,
-                    'Hora': hora_visita,
+                    'Hora': hora_visita_formatada,
                     'Nome': nome_cliente,
                     'Telefone': telefone_cliente,
                     'Fechou?': cliente_fechou,
