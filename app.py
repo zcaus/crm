@@ -149,7 +149,7 @@ if st.session_state.autenticado:
         def get_excel_buffer(df):
             # Cria uma cópia do DataFrame e adiciona a coluna "Usuário"
             df_copy = df.copy()
-            df_copy["Usuário"] = st.session_state.perfil_selecionado
+            df_copy["Representante"] = st.session_state.perfil_selecionado
             buffer = io.BytesIO()
             df_copy.to_excel(buffer, index=False)
             buffer.seek(0)  # Resetar o ponteiro do buffer para o início
@@ -170,3 +170,4 @@ if st.session_state.autenticado:
         st.session_state.autenticado = False
         st.session_state.perfil_selecionado = None
         st.info("Você saiu da aplicação.")
+        st.rerun()
