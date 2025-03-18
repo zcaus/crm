@@ -7,7 +7,7 @@ from datetime import datetime
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Cláudia Regina": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Cláudia": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
     "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
     "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil3.csv"}
 }
@@ -80,8 +80,8 @@ if st.session_state.autenticado:
         data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
         data_visita_formatada = data_visita.strftime('%d/%m/%Y')
         
-        # Utilizando st.time_input para capturar o horário no formato HH:MM
-        hora_visita = col2.time_input("Selecione o Horário", value=None)
+        # Utilizando st.time_input com valor padrão (hora atual)
+        hora_visita = col2.time_input("Selecione o Horário", value=datetime.now().time())
         hora_visita_formatada = hora_visita.strftime("%H:%M")
         
         nome_cliente = st.text_input("Nome do Cliente")
