@@ -147,13 +147,17 @@ if st.session_state.autenticado:
 
         @st.cache_data
         def get_excel_buffer(df):
-            # Cria uma cópia do DataFrame e adiciona a coluna "Usuário"
+            # Cria uma cópia do DataFrame e remove a coluna "id"
             df_copy = df.copy()
+            if "id" in df_copy.columns:
+                df_copy.drop(columns=["id"], inplace=True)
+            # Adiciona a coluna "Usuário"
             df_copy["Representante"] = st.session_state.perfil_selecionado
             buffer = io.BytesIO()
             df_copy.to_excel(buffer, index=False)
             buffer.seek(0)  # Resetar o ponteiro do buffer para o início
             return buffer
+
 
         excel_buffer = get_excel_buffer(agendamentos)
         st.download_button(
