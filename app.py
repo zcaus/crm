@@ -3,13 +3,14 @@ import csv
 import pandas as pd
 from datetime import datetime
 import re
+import io
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Luis Antônio": {"login": "Luis", "senha": "1710", "csv": "perfil1.csv"},
-    "Antônio Pereira": {"login": "Antonio", "senha": "1710", "csv": "perfil2.csv"},
+    "Cláudia": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
     "Leandro Macedo": {"login": "Leandro", "senha": "1710", "csv": "perfil3.csv"},
-    "Renan Lindão": {"login": "Renan", "senha": "1710", "csv": "perfil4.csv"}
+    "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil4.csv"}
 }
 
 # **Iniciar Session State**
@@ -109,8 +110,24 @@ if st.session_state.autenticado:
     st.session_state.endereco = None
 
     agendamentos = ler_agendamentos()
+    
     if not agendamentos.empty:
         st.write(agendamentos)
+        @st.cache_data
+        def get_excel_buffer(df):
+            buffer = io.BytesIO()
+            df.to_excel(buffer, index=False)
+            buffer.seek(0)  # Resetar o ponteiro do buffer para o início
+            return buffer
+
+        excel_buffer = get_excel_buffer(agendamentos)
+
+        st.download_button(
+            label="Download como XLSX",
+            data=excel_buffer.getvalue(),  # Obter o conteúdo do buffer como bytes
+            file_name="agendamentos.xlsx",
+            mime="application/vnd.ms-excel"
+        )
     else:
         st.write("Nenhuma visita realizada até o momento.")
     
