@@ -140,3 +140,4 @@ if st.session_state.autenticado:
         st.session_state.autenticado = False
         st.session_state.perfil_selecionado = None
         st.info("Você saiu da aplicação.")
+
