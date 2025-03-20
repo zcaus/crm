@@ -1,52 +1,22 @@
-from dotenv import load_dotenv
-import os
-from supabase import create_client, Client
 import streamlit as st
 import pandas as pd
 import re
 import io
+import os
 from datetime import datetime, timedelta
-
-# Carrega as variáveis de ambiente do arquivo .env
-load_dotenv()
-
-# Use os nomes das variáveis de ambiente
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("Supabase URL e Key são obrigatórios!")
-
-# Cria o cliente Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Função para formatar valores monetários no padrão brasileiro: "R$ XXX.XXX,XX"
 def format_currency_br(value):
-    try:
-        formatted = f"{float(value):,.2f}"  # Ex: 12,345.67
-        formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
-        return f"R$ {formatted}"
-    except Exception:
-        return value
-
-# Função para gerar o buffer do Excel (remove a coluna "id" e adiciona a coluna "Usuário")
-@st.cache_data
-def get_excel_buffer(df):
-    df_copy = df.copy()
-    if "id" in df_copy.columns:
-        df_copy.drop(columns=["id"], inplace=True)
-    df_copy["Usuário"] = st.session_state.perfil_selecionado
-    buffer = io.BytesIO()
-    df_copy.to_excel(buffer, index=False)
-    buffer.seek(0)
-    return buffer
+    formatted = f"{value:,.2f}"  # Ex: 12,345.67
+    formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {formatted}"
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Cláudia Costa": {"login": "Claudia", "senha": "1501"},
-    "Evandro Alexandre": {"login": "Evandro", "senha": "0512"},
-    "Renan": {"login": "Renan", "senha": "1710"},
-    "Cauã Moreira": {"login": "Caua", "senha": "2805"}
+    "Cláudia Costa": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
+    "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil3.csv"},
+    "Cauã Moreira": {"login": "Caua", "senha": "2805", "csv": "perfil4.csv"}
 }
 
 # **Inicializar Session State**
@@ -54,7 +24,7 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 if 'perfil_selecionado' not in st.session_state:
     st.session_state.perfil_selecionado = None
-# Armazena o horário selecionado; por padrão, hora atual - 3 horas
+# Inicializa uma variável para manter o horário selecionado (hora atual - 3 horas)
 if 'hora_selecionada' not in st.session_state:
     st.session_state.hora_selecionada = (datetime.now() - timedelta(hours=3)).time()
 
@@ -68,47 +38,59 @@ def autenticar(login, senha):
 # **Interface de Login (quando não autenticado)**
 if not st.session_state.autenticado:
     st.title("Login")
-    login_input = st.text_input("Login")
-    senha_input = st.text_input("Senha", type="password")
+    login = st.text_input("Login")
+    senha = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        perfil = autenticar(login_input, senha_input)
+        perfil = autenticar(login, senha)
         if perfil:
             st.session_state.autenticado = True
             st.session_state.perfil_selecionado = perfil
-            st.success(f"Bem-vindo, {perfil}!")
+            st.success(f"Bem-vindo(a), {perfil}!")
         else:
             st.error("Login ou senha inválidos.")
 
-# Funções para interagir com o Supabase
-def salvar_agendamento_supabase(agendamento: dict):
-    response = supabase.table("agendamentos").insert({
-        "Data": agendamento["Data"],
-        "Hora": agendamento["Hora"],
-        "Nome": agendamento["Nome"],
-        "Telefone": agendamento["Telefone"],
-        "Fechou": agendamento["Fechou?"],
-        "Valor": agendamento["Valor(R$)"],
-        "CEP": agendamento["CEP"],
-        "Observacao": agendamento["Observação"],
-        "Usuario": agendamento["Usuario"]
-    }).execute()
-    if response.error:
-        st.error(f"Erro ao salvar: {response.error.message}")
-
-def ler_agendamentos_supabase(usuario: str):
-    response = supabase.table("agendamentos").select("*").eq("Usuario", usuario).execute()
-    if response.error:
-        st.error(f"Erro ao ler os dados: {response.error.message}")
-        return pd.DataFrame()
-    return pd.DataFrame(response.data)
-
 # **Interface de Cadastro e Gestão (após login)**
 if st.session_state.autenticado:
+    arquivo_csv = perfis[st.session_state.perfil_selecionado]["csv"]  # Arquivo CSV associado ao perfil
+
+    # Define o cabeçalho, incluindo a coluna "Observação"
+    cabecalho = "id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observação\n"
+    if not os.path.exists(arquivo_csv):
+        with open(arquivo_csv, 'w', encoding='latin1') as f:
+            f.write(cabecalho)
+    else:
+        try:
+            df_temp = pd.read_csv(arquivo_csv, encoding='latin1')
+            if df_temp.empty or "id" not in df_temp.columns or "Observação" not in df_temp.columns:
+                raise ValueError
+        except Exception:
+            with open(arquivo_csv, 'w', encoding='latin1') as f:
+                f.write(cabecalho)
+
+    # Função para ler os agendamentos com encoding especificado
+    def ler_agendamentos():
+        try:
+            return pd.read_csv(arquivo_csv, encoding='latin1', dtype={'Telefone': str, 'CEP': str})
+        except FileNotFoundError:
+            return pd.DataFrame(columns=['id', 'Data', 'Hora', 'Nome', 'Telefone', 'Fechou?', 'Valor(R$)', 'CEP', 'Observação'])
+
+    # Função para salvar um novo agendamento
+    def salvar_agendamento(agendamento):
+        agendamentos = ler_agendamentos()
+        if agendamentos.empty:
+            agendamento['id'] = 1
+        else:
+            agendamento['id'] = agendamentos['id'].max() + 1
+        novo_df = pd.DataFrame([agendamento])
+        agendamentos = pd.concat([agendamentos, novo_df], ignore_index=True)
+        agendamentos.to_csv(arquivo_csv, index=False, encoding='latin1')
+
+    # Formulário de Agendamento
     with st.form("agendamento_form"):
         col1, col2 = st.columns(2)
         data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
-        data_visita_formatada = data_visita.strftime("%d/%m/%Y")
-        # Usa o valor armazenado (com 3 horas a menos) para preencher o campo de hora
+        data_visita_formatada = data_visita.strftime('%d/%m/%Y')
+        # Usa o valor armazenado (já com 3 horas a menos) para preencher o campo de hora
         hora_visita = col2.time_input("Selecione o Horário", value=st.session_state.hora_selecionada)
         hora_visita_formatada = hora_visita.strftime("%H:%M")
         nome_cliente = st.text_input("Nome do Cliente")
@@ -120,39 +102,58 @@ if st.session_state.autenticado:
         observacao = st.text_area("Observação")
         submitted = st.form_submit_button("Marcar")
         if submitted:
+            # Atualiza o horário selecionado na session state
             st.session_state.hora_selecionada = hora_visita
-            telefone_cliente = re.sub(r"(\d{2})(\d{4,5})(\d{4})", r"(\1) \2-\3", telefone_cliente)
+            # Formatação do telefone e validação do CEP
+            telefone_cliente = re.sub(r'(\d{2})(\d{4,5})(\d{4})', r'(\1) \2-\3', telefone_cliente)
             if len(endereco) == 8 and endereco.isdigit():
                 endereco_formatado = "{}-{}".format(endereco[:5], endereco[5:])
                 agendamento = {
-                    "Data": data_visita_formatada,
-                    "Hora": hora_visita_formatada,
-                    "Nome": nome_cliente,
-                    "Telefone": telefone_cliente,
-                    "Fechou?": cliente_fechou,
-                    "Valor(R$)": sefechou_valor,
-                    "CEP": endereco_formatado,
-                    "Observação": observacao,
-                    "Usuario": st.session_state.perfil_selecionado
+                    'Data': data_visita_formatada,
+                    'Hora': hora_visita_formatada,
+                    'Nome': nome_cliente,
+                    'Telefone': telefone_cliente,
+                    'Fechou?': cliente_fechou,
+                    'Valor(R$)': sefechou_valor,
+                    'CEP': endereco_formatado,
+                    'Observação': observacao
                 }
-                salvar_agendamento_supabase(agendamento)
+                salvar_agendamento(agendamento)
                 st.success("Visita realizada com Sucesso!")
             else:
                 st.error("CEP inválido. Insira 8 dígitos numéricos.")
 
-    # Ler e exibir os agendamentos do usuário logado
-    agendamentos = ler_agendamentos_supabase(st.session_state.perfil_selecionado)
+    # Ler e exibir os agendamentos
+    agendamentos = ler_agendamentos()
     if not agendamentos.empty:
-        if "Valor" in agendamentos.columns:
+        # Aplica a formatação dos valores monetários
+        if 'Valor(R$)' in agendamentos.columns:
             try:
-                agendamentos["Valor"] = agendamentos["Valor"].apply(
-                    lambda x: format_currency_br(x) if x not in [None, ""] else ""
+                agendamentos['Valor(R$)'] = agendamentos['Valor(R$)'].apply(
+                    lambda x: format_currency_br(
+                        float(str(x).replace("R$", "").replace(" ", "").replace(".", "").replace(",", "."))
+                    ) if x not in [None, ""] else ""
                 )
             except Exception as e:
                 st.error(f"Erro na formatação do valor: {e}")
-        df_display = agendamentos.drop("id", axis=1) if "id" in agendamentos.columns else agendamentos.copy()
+
+        # Exibe o DataFrame sem a coluna "id"
+        df_display = agendamentos.drop("id", axis=1)
         st.markdown("### Agendamentos")
         st.dataframe(df_display)
+
+        # Botão para baixar XLSX (sem a coluna "id" e com a coluna "Usuário")
+        @st.cache_data
+        def get_excel_buffer(df):
+            df_copy = df.copy()
+            if "id" in df_copy.columns:
+                df_copy.drop("id", axis=1, inplace=True)
+            df_copy["Usuário"] = st.session_state.perfil_selecionado
+            buffer = io.BytesIO()
+            df_copy.to_excel(buffer, index=False)
+            buffer.seek(0)
+            return buffer
+
         excel_buffer = get_excel_buffer(agendamentos)
         st.download_button(
             label="Download como XLSX",
@@ -163,6 +164,7 @@ if st.session_state.autenticado:
     else:
         st.write("Nenhum agendamento realizado até o momento.")
 
+    # Botão para sair com rerun automático
     if st.button("Sair"):
         st.session_state.autenticado = False
         st.session_state.perfil_selecionado = None
