@@ -45,7 +45,7 @@ if not st.session_state.autenticado:
         if perfil:
             st.session_state.autenticado = True
             st.session_state.perfil_selecionado = perfil
-            st.success(f"Bem-vindo, {perfil}!")
+            st.success(f"Bem-vindo(a), {perfil}!")
         else:
             st.error("Login ou senha inválidos.")
 
