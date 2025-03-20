@@ -1,1 +1,4 @@
-id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observa��o
+﻿,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observação
+0,20/03/2025,12:04,Cauã Moreira,(11) 98868-3935,Sim,"R$ 6.700,00",04854-015,
+1,19/03/2025,12:07,Paulo Rogerio Silva,(11) 91304-4303,Sim,"R$ 5.000,00",04855-550,
+2,19/03/2025,12:09,Cauã Moreira,(11) 98868-3935,Sim,"R$ 2.000,00",04854-015,
