@@ -4,7 +4,6 @@ import re
 import io
 import os
 from datetime import datetime
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 # Função para formatar valores monetários no padrão brasileiro: "R$ XXX.XXX,XX"
 def format_currency_br(value):
