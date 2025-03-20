@@ -13,10 +13,10 @@ def format_currency_br(value):
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
-    "Cláudia": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
+    "Cláudia Costa": {"login": "Claudia", "senha": "1501", "csv": "perfil1.csv"},
     "Evandro Alexandre": {"login": "Evandro", "senha": "0512", "csv": "perfil2.csv"},
     "Renan": {"login": "Renan", "senha": "1710", "csv": "perfil3.csv"},
-    "Caua": {"login": "Cauã Moreira", "senha": "2805", "csv": "perfil4.csv"}
+    "Cauã Moreira": {"login": "Caua", "senha": "2805", "csv": "perfil4.csv"}
 }
 
 # **Inicializar Session State**
