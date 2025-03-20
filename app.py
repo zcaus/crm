@@ -4,12 +4,25 @@ import re
 import io
 import os
 from datetime import datetime
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
 # Função para formatar valores monetários no padrão brasileiro: "R$ XXX.XXX,XX"
 def format_currency_br(value):
     formatted = f"{value:,.2f}"  # Ex: 12,345.67
     formatted = formatted.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {formatted}"
+
+# Função para gerar o buffer do Excel (remove a coluna "id" e adiciona a coluna "Usuário")
+@st.cache_data
+def get_excel_buffer(df):
+    df_copy = df.copy()
+    if "id" in df_copy.columns:
+        df_copy.drop(columns=["id"], inplace=True)
+    df_copy["Usuário"] = st.session_state.perfil_selecionado
+    buffer = io.BytesIO()
+    df_copy.to_excel(buffer, index=False)
+    buffer.seek(0)
+    return buffer
 
 # **Definição de Perfis, Logins e Senhas**
 perfis = {
@@ -24,6 +37,9 @@ if 'autenticado' not in st.session_state:
     st.session_state.autenticado = False
 if 'perfil_selecionado' not in st.session_state:
     st.session_state.perfil_selecionado = None
+# Inicializa uma variável para manter o horário selecionado
+if 'hora_selecionada' not in st.session_state:
+    st.session_state.hora_selecionada = datetime.now().time()
 
 # **Função para Autenticar**
 def autenticar(login, senha):
@@ -48,7 +64,7 @@ if not st.session_state.autenticado:
 
 # **Interface de Cadastro e Gestão (após login)**
 if st.session_state.autenticado:
-    arquivo_csv = perfis[st.session_state.perfil_selecionado]["csv"]  # Arquivo CSV associado ao perfil
+    arquivo_csv = perfis[st.session_state.perfil_selecionado]["csv"]  # CSV associado ao perfil
 
     # Define o cabeçalho, incluindo a coluna "Observação"
     cabecalho = "id,Data,Hora,Nome,Telefone,Fechou?,Valor(R$),CEP,Observação\n"
@@ -69,7 +85,7 @@ if st.session_state.autenticado:
         try:
             return pd.read_csv(arquivo_csv, encoding='latin1', dtype={'Telefone': str, 'CEP': str})
         except FileNotFoundError:
-            return pd.DataFrame(columns=['id','Data','Hora','Nome','Telefone','Fechou?','Valor(R$)','CEP','Observação'])
+            return pd.DataFrame(columns=['id', 'Data', 'Hora', 'Nome', 'Telefone', 'Fechou?', 'Valor(R$)', 'CEP', 'Observação'])
 
     # Função para salvar um novo agendamento
     def salvar_agendamento(agendamento):
@@ -87,7 +103,8 @@ if st.session_state.autenticado:
         col1, col2 = st.columns(2)
         data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
         data_visita_formatada = data_visita.strftime('%d/%m/%Y')
-        hora_visita = col2.time_input("Selecione o Horário", value=datetime.now().time())
+        # Usa o valor armazenado em session_state para preservar a seleção
+        hora_visita = col2.time_input("Selecione o Horário", value=st.session_state.hora_selecionada)
         hora_visita_formatada = hora_visita.strftime("%H:%M")
         nome_cliente = st.text_input("Nome do Cliente")
         telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
@@ -98,6 +115,8 @@ if st.session_state.autenticado:
         observacao = st.text_area("Observação")
         submitted = st.form_submit_button("Marcar")
         if submitted:
+            # Atualiza o horário selecionado na session state
+            st.session_state.hora_selecionada = hora_visita
             # Formatação do telefone e validação do CEP
             telefone_cliente = re.sub(r'(\d{2})(\d{4,5})(\d{4})', r'(\1) \2-\3', telefone_cliente)
             if len(endereco) == 8 and endereco.isdigit():
