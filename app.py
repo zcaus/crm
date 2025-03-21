@@ -126,7 +126,7 @@ if not st.session_state.autenticado:
 # Interface após login
 if st.session_state.autenticado:
     # Se o usuário logado for "Caua", exibe somente o acompanhamento com filtros
-    if st.session_state.usuario == "Caua":
+    if st.session_state.usuario in ["Caua", "Renan"]:
         st.title("Acompanhamento de Visitas")
         
         # Filtros: data e vendedor
