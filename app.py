@@ -52,7 +52,6 @@ def inserir_usuarios_iniciais():
             supabase.table("usuarios").insert(usuario).execute()
 
 inserir_usuarios_iniciais()
-
 # Função para autenticar usuário
 def autenticar_usuario(login, senha):
     response = supabase.table("usuarios").select("senha, nome").eq("login", login).execute()
@@ -66,14 +65,20 @@ def autenticar_usuario(login, senha):
     
     return None
 
-# Função para salvar agendamento
+# Função para salvar agendamento (usada por usuários que não são "Caua")
 def salvar_agendamento(agendamento):
     supabase.table("agendamentos").insert(agendamento).execute()
 
-# Função para ler agendamentos
+# Função para ler agendamentos filtrados por usuário
 @st.cache_data(ttl=10)  # Cache por 10 segundos
-def ler_agendamentos(usuario):
+def ler_agendamentos_por_usuario(usuario):
     response = supabase.table("agendamentos").select("*").eq("Usuario", usuario).order("id", desc=True).execute()
+    return pd.DataFrame(response.data)
+
+# Função para ler todos os agendamentos (usada pelo usuário "Caua")
+@st.cache_data(ttl=10)
+def ler_todos_agendamentos():
+    response = supabase.table("agendamentos").select("*").order("id", desc=True).execute()
     return pd.DataFrame(response.data)
 
 # Função para formatar valor em real
@@ -114,71 +119,120 @@ if not st.session_state.autenticado:
         if nome_usuario:
             st.session_state.autenticado = True
             st.session_state.usuario = login_input  # Armazena o login para uso posterior
-            st.success(f"Bem-vindo, {nome_usuario}!")
+            st.success(f"Bem-vindo(a), {nome_usuario}!")
         else:
             st.error("Login ou senha inválidos.")
 
-# Interface de Cadastro e Gestão (após login)
+# Interface após login
 if st.session_state.autenticado:
-    st.title("Cadastro de Agendamentos")
-    with st.form("agendamento_form"):
+    # Se o usuário logado for "Caua", exibe somente o acompanhamento com filtros
+    if st.session_state.usuario == "Caua":
+        st.title("Acompanhamento de Visitas")
+        
+        # Filtros: data e vendedor
         col1, col2 = st.columns(2)
-        data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
-        data_visita_formatada = data_visita.strftime("%d/%m/%Y")
-        hora_visita = col2.time_input("Selecione o Horário", value=st.session_state.hora_selecionada)
-        hora_visita_formatada = hora_visita.strftime("%H:%M")
-        nome_cliente = st.text_input("Nome do Cliente")
-        telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
-        cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não", "Em negociação"])
-        col1, col2 = st.columns(2)
-        sefechou_valor = col1.text_input("Valor (R$)", placeholder="R$ 0,00")
-        endereco = col2.text_input("CEP", placeholder="00000000")
-        observacao = st.text_area("Observação")
-        submitted = st.form_submit_button("Marcar")
-        if submitted:
-            st.session_state.hora_selecionada = hora_visita
-            telefone_cliente = re.sub(r"(\d{2})(\d{4,5})(\d{4})", r"(\1) \2-\3", telefone_cliente)
-            if len(endereco) == 8 and endereco.isdigit():
-                endereco_formatado = "{}-{}".format(endereco[:5], endereco[5:])
-                agendamento = {
-                    "Data": data_visita_formatada,
-                    "Hora": hora_visita_formatada,
-                    "Nome": nome_cliente,
-                    "Telefone": telefone_cliente,
-                    "Fechou": cliente_fechou,
-                    "Valor": sefechou_valor,
-                    "CEP": endereco_formatado,
-                    "Observacao": observacao,
-                    "Usuario": st.session_state.usuario
-                }
-                salvar_agendamento(agendamento)
-                st.success("Visita realizada com Sucesso!")
-            else:
-                st.error("CEP inválido. Insira 8 dígitos numéricos.")
-
-    # Ler e exibir os agendamentos do usuário logado
-    agendamentos = ler_agendamentos(st.session_state.usuario)
-    if not agendamentos.empty:
-        if "Valor" in agendamentos.columns:
-            try:
-                agendamentos["Valor"] = agendamentos["Valor"].apply(
-                    lambda x: format_currency_br(x) if x not in [None, ""] else ""
-                )
-            except Exception as e:
-                st.error(f"Erro na formatação do valor: {e}")
-        df_display = agendamentos.drop("id", axis=1) if "id" in agendamentos.columns else agendamentos.copy()
-        st.markdown("### Seus Agendamentos")
-        st.dataframe(df_display)
-        excel_buffer = get_excel_buffer(agendamentos)
-        st.download_button(
-            label="Download como XLSX",
-            data=excel_buffer.getvalue(),
-            file_name="agendamentos.xlsx",
-            mime="application/vnd.ms-excel"
-        )
+        with col1:
+            filtro_data = st.date_input("Filtrar por Data", value=datetime.now().date())
+        with col2:
+            # Cria uma lista com vendedores a partir dos agendamentos ou uma lista pré-definida
+            vendedores_opcoes = ["Todos", "Claudia", "Evandro"]
+            filtro_vendedor = st.selectbox("Filtrar por Vendedor", options=vendedores_opcoes)
+        
+        # Lê todos os agendamentos
+        agendamentos = ler_todos_agendamentos()
+        
+        # Converte a coluna "Data" para datetime, considerando o formato "DD/MM/YYYY"
+        if not agendamentos.empty and "Data" in agendamentos.columns:
+            agendamentos["Data_dt"] = pd.to_datetime(agendamentos["Data"], format="%d/%m/%Y", errors='coerce')
+            # Aplica filtro por data comparando com filtro_data (que já é um objeto date)
+            agendamentos = agendamentos[agendamentos["Data_dt"].dt.date == filtro_data]
+        
+        # Aplica filtro por vendedor, se selecionado
+        if filtro_vendedor != "Todos" and "Usuario" in agendamentos.columns:
+            agendamentos = agendamentos[agendamentos["Usuario"] == filtro_vendedor]
+        
+        if not agendamentos.empty:
+            if "Valor" in agendamentos.columns:
+                try:
+                    agendamentos["Valor"] = agendamentos["Valor"].apply(
+                        lambda x: format_currency_br(x) if x not in [None, ""] else ""
+                    )
+                except Exception as e:
+                    st.error(f"Erro na formatação do valor: {e}")
+            df_display = agendamentos.drop(columns=["id", "Data_dt"], errors='ignore')
+            st.markdown("### Visitas")
+            st.dataframe(df_display)
+            excel_buffer = get_excel_buffer(agendamentos)
+            st.download_button(
+                label="Download como XLSX",
+                data=excel_buffer.getvalue(),
+                file_name="agendamentos.xlsx",
+                mime="application/vnd.ms-excel"
+            )
+        else:
+            st.write("Nenhuma visita encontrada para os filtros selecionados.")
+    
+    # Para os demais usuários, exibe a interface de cadastro e visualização de seus agendamentos
     else:
-        st.write("Nenhum agendamento realizado até o momento.")
-
+        st.title("Cadastro de Visitas")
+        with st.form("agendamento_form"):
+            col1, col2 = st.columns(2)
+            data_visita = col1.date_input("Selecione a Data da Visita", format="DD/MM/YYYY")
+            data_visita_formatada = data_visita.strftime("%d/%m/%Y")
+            hora_visita = col2.time_input("Selecione o Horário", value=st.session_state.hora_selecionada)
+            hora_visita_formatada = hora_visita.strftime("%H:%M")
+            nome_cliente = st.text_input("Nome do Cliente")
+            telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
+            cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não", "Em negociação"])
+            col1, col2 = st.columns(2)
+            sefechou_valor = col1.text_input("Valor (R$)", placeholder="R$ 0,00")
+            endereco = col2.text_input("CEP", placeholder="00000000")
+            observacao = st.text_area("Observação")
+            submitted = st.form_submit_button("Marcar")
+            if submitted:
+                st.session_state.hora_selecionada = hora_visita
+                telefone_cliente = re.sub(r"(\d{2})(\d{4,5})(\d{4})", r"(\1) \2-\3", telefone_cliente)
+                if len(endereco) == 8 and endereco.isdigit():
+                    endereco_formatado = "{}-{}".format(endereco[:5], endereco[5:])
+                    agendamento = {
+                        "Data": data_visita_formatada,
+                        "Hora": hora_visita_formatada,
+                        "Nome": nome_cliente,
+                        "Telefone": telefone_cliente,
+                        "Fechou": cliente_fechou,
+                        "Valor": sefechou_valor,
+                        "CEP": endereco_formatado,
+                        "Observacao": observacao,
+                        "Usuario": st.session_state.usuario
+                    }
+                    salvar_agendamento(agendamento)
+                    st.success("Visita realizada com Sucesso!")
+                else:
+                    st.error("CEP inválido. Insira 8 dígitos numéricos.")
+        
+        # Ler e exibir os agendamentos do usuário logado
+        agendamentos = ler_agendamentos_por_usuario(st.session_state.usuario)
+        if not agendamentos.empty:
+            if "Valor" in agendamentos.columns:
+                try:
+                    agendamentos["Valor"] = agendamentos["Valor"].apply(
+                        lambda x: format_currency_br(x) if x not in [None, ""] else ""
+                    )
+                except Exception as e:
+                    st.error(f"Erro na formatação do valor: {e}")
+            df_display = agendamentos.drop("id", axis=1) if "id" in agendamentos.columns else agendamentos.copy()
+            st.markdown("### Suas Visitas")
+            st.dataframe(df_display)
+            excel_buffer = get_excel_buffer(agendamentos)
+            st.download_button(
+                label="Download como XLSX",
+                data=excel_buffer.getvalue(),
+                file_name="agendamentos.xlsx",
+                mime="application/vnd.ms-excel"
+            )
+        else:
+            st.write("Nenhua visita realizada até o momento.")
+    
     if st.button("Sair"):
         st.session_state.autenticado = False
         st.session_state.usuario = None
