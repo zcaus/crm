@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import re
 import io
+import requests
 from datetime import datetime, timedelta
 from supabase import create_client
 
@@ -27,6 +28,18 @@ def init_connection():
         raise ValueError("Credenciais do Supabase não encontradas!")
     
     return create_client(url, key)
+
+# Função para consultar CEP
+def consultar_cep(cep):
+    cep = cep.replace("-", "").replace(".", "").strip()
+    if len(cep) == 8 and cep.isdigit():
+        url = f"https://viacep.com.br/ws/{cep}/json/"
+        response = requests.get(url)
+        if response.status_code == 200:
+            dados = response.json()
+            if "erro" not in dados:
+                return dados
+    return None
 
 # Inicializa a conexão
 supabase = init_connection()
@@ -52,6 +65,7 @@ def inserir_usuarios_iniciais():
             supabase.table("usuarios").insert(usuario).execute()
 
 inserir_usuarios_iniciais()
+
 # Função para autenticar usuário
 def autenticar_usuario(login, senha):
     response = supabase.table("usuarios").select("senha, nome").eq("login", login).execute()
@@ -108,6 +122,8 @@ if 'usuario' not in st.session_state:
     st.session_state.usuario = None
 if 'hora_selecionada' not in st.session_state:
     st.session_state.hora_selecionada = (datetime.now() - timedelta(hours=3)).time()
+if 'endereco_completo' not in st.session_state:
+    st.session_state.endereco_completo = ""
 
 # Interface de Login
 if not st.session_state.autenticado:
@@ -160,6 +176,11 @@ if st.session_state.autenticado:
                 except Exception as e:
                     st.error(f"Erro na formatação do valor: {e}")
             df_display = agendamentos.drop(columns=["id", "Data_dt"], errors='ignore')
+            # Reordenar as colunas do dataframe
+            colunas_ordenadas = ["Data", "Hora", "Nome", "Telefone", "Rua", "Numero", "CEP", "Fechou", "Valor", "Observacao", "Usuario"]
+            # Usar apenas as colunas que existem no dataframe
+            colunas_existentes = [col for col in colunas_ordenadas if col in df_display.columns]
+            df_display = df_display[colunas_existentes]
             st.markdown("### Visitas")
             st.dataframe(df_display)
             excel_buffer = get_excel_buffer(agendamentos)
@@ -184,16 +205,48 @@ if st.session_state.autenticado:
             nome_cliente = st.text_input("Nome do Cliente")
             telefone_cliente = st.text_input("Telefone do Cliente", placeholder="(00) 00000-0000")
             cliente_fechou = st.selectbox("Cliente fechou?", ["Sim", "Não", "Em negociação"])
+            
             col1, col2 = st.columns(2)
             sefechou_valor = col1.text_input("Valor (R$)", placeholder="R$ 0,00")
-            endereco = col2.text_input("CEP", placeholder="00000000")
+            
+            # Campo de CEP com busca automática
+            cep = col2.text_input("CEP", placeholder="00000000")
+
+            # Botão para buscar CEP
+            buscar_cep = st.form_submit_button("Buscar CEP")
+
+            # Inicializa o campo de rua
+            if 'rua' not in st.session_state:
+                st.session_state.rua = ""
+
+            # Se o botão de buscar CEP for clicado
+            if buscar_cep and cep:
+                if len(cep) == 8 and cep.isdigit():
+                    dados_cep = consultar_cep(cep)
+                    if dados_cep:
+                        st.session_state.rua = f"{dados_cep['logradouro']}, {dados_cep['bairro']}, {dados_cep['localidade']}/{dados_cep['uf']}"
+                    else:
+                        st.session_state.rua = ""
+                        st.error("CEP não encontrado")
+                else:
+                    st.session_state.rua = ""
+                    st.error("CEP inválido. Insira 8 dígitos numéricos.")
+
+            # Campos para endereço e número lado a lado
+            col_rua, col_numero = st.columns([3, 1])  # Proporção 3:1 para rua e número
+            with col_rua:
+                rua = st.text_input("Endereço", value=st.session_state.rua)
+            with col_numero:
+                numero = st.text_input("Número", placeholder="123")
+
             observacao = st.text_area("Observação")
             submitted = st.form_submit_button("Marcar")
+            
             if submitted:
                 st.session_state.hora_selecionada = hora_visita
                 telefone_cliente = re.sub(r"(\d{2})(\d{4,5})(\d{4})", r"(\1) \2-\3", telefone_cliente)
-                if len(endereco) == 8 and endereco.isdigit():
-                    endereco_formatado = "{}-{}".format(endereco[:5], endereco[5:])
+                if len(cep) == 8 and cep.isdigit():
+                    endereco_formatado = "{}-{}".format(cep[:5], cep[5:])
                     agendamento = {
                         "Data": data_visita_formatada,
                         "Hora": hora_visita_formatada,
@@ -202,6 +255,7 @@ if st.session_state.autenticado:
                         "Fechou": cliente_fechou,
                         "Valor": sefechou_valor,
                         "CEP": endereco_formatado,
+                        "Rua": rua,  # Adicionando o campo de rua ao agendamento
                         "Observacao": observacao,
                         "Usuario": st.session_state.usuario
                     }
@@ -221,6 +275,11 @@ if st.session_state.autenticado:
                 except Exception as e:
                     st.error(f"Erro na formatação do valor: {e}")
             df_display = agendamentos.drop("id", axis=1) if "id" in agendamentos.columns else agendamentos.copy()
+            # Reordenar as colunas do dataframe
+            colunas_ordenadas = ["Data", "Hora", "Nome", "Telefone", "Rua", "Numero", "CEP", "Fechou", "Valor", "Observacao"]
+            # Usar apenas as colunas que existem no dataframe
+            colunas_existentes = [col for col in colunas_ordenadas if col in df_display.columns]
+            df_display = df_display[colunas_existentes]
             st.markdown("### Suas Visitas")
             st.dataframe(df_display)
             excel_buffer = get_excel_buffer(agendamentos)
